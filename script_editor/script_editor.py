@@ -1,22 +1,26 @@
 #!/usr/bin/env python
+'''
+script_editor.py: GUI tool for parsing OCR'd script files into Script_markdown
+'''
+
 __author__ = 'bapril'
 
 import Tkinter as tk
 import ttk
 import tkFileDialog
 import tkMessageBox
-import os, sys
+import os
 import shutil
-from PIL import Image
-from PIL import ImageTk
-import pypdfocr.pypdfocr_gs as pdfImg
 import glob
+from sys import platform
+import pypdfocr.pypdfocr_gs as pdfImg
 import script_render_engine
 import script_parse_engine
-from sys import platform
-
+from PIL import Image
+from PIL import ImageTk
 
 class ScriptEditor(tk.Frame):
+    """Main GUI Class for ScriptEditor"""
     def __init__(self, parent, *args, **kwargs):
         tk.Frame.__init__(self, parent, *args, **kwargs)
 
@@ -27,9 +31,11 @@ class ScriptEditor(tk.Frame):
         self.project = None # Name of the current project.
         self.dir_path = ""
         self.edit_page_path = ""
+        self.tiff_im = None
 
         self.menubar = tk.Menu(self)
         self.build_menubar()
+        self.parent = parent
         self.create_content_grid()
 
         self.page_list_frame = tk.LabelFrame(self.content, text="Pages")
@@ -51,7 +57,8 @@ class ScriptEditor(tk.Frame):
         self.page_list_box.pack(side=tk.LEFT, fill="both", expand="yes")
 
         #Tabs of Input
-        self.pdf_tab = tk.Frame(self.input_notebook)   # first page, which would get widgets gridded into it
+        # first page, which would get widgets gridded into it
+        self.pdf_tab = tk.Frame(self.input_notebook)
         self.tiff_tab = tk.Frame(self.input_notebook)   # second page
         self.ocr_tab = tk.Frame(self.input_notebook)
         self.text_tab = tk.Frame(self.input_notebook)
@@ -61,7 +68,7 @@ class ScriptEditor(tk.Frame):
         self.input_notebook.add(self.text_tab, text='TXT')
 
         #PDF Input Tab
-        self.pdf_canvas = tk.Canvas(self.pdf_tab, height=250, width=300 )
+        self.pdf_canvas = tk.Canvas(self.pdf_tab, height=250, width=300)
         self.pdf_image = self.pdf_canvas.create_image(0, 0)
         self.pdf_canvas.pack(fill="both", expand="yes")
 
@@ -71,12 +78,12 @@ class ScriptEditor(tk.Frame):
         self.tiff_label.pack(fill="both", expand="yes")
 
         #OCR Input Tab
-        self.ocr_text = tk.Text (self.ocr_tab)
+        self.ocr_text = tk.Text(self.ocr_tab)
         self.ocr_text.config(state=tk.DISABLED)
         self.ocr_text.pack(fill="both", expand="yes")
 
         #TXT Input Tab
-        self.text_text = tk.Text (self.text_tab)
+        self.text_text = tk.Text(self.text_tab)
         self.text_text.focus()
         self.text_text.pack(fill="both", expand="yes")
         self.text_text.bind('<<Modified>>', self.change_callback)
@@ -89,32 +96,32 @@ class ScriptEditor(tk.Frame):
             self.text_text
         )
         self.text_render_engine = script_render_engine.ScriptRenderEngine(
-                self.rendered_text,
-                self.text_parse_engine)
+            self.rendered_text,
+            self.text_parse_engine)
 
         self.page_next_button = tk.Button(
             self.page_control_frame,
             text="Next Page",
-            command=self.next_page).grid(row=0, column = 1)
+            command=self.next_page).grid(row=0, column=1)
         self.page_prev_button = tk.Button(
             self.page_control_frame,
             text="Prev. Page",
-            command=self.prev_page).grid(row=0, column = 0)
+            command=self.prev_page).grid(row=0, column=0)
 
         self.text_save_button = tk.Button(
             self.input_control_frame,
             text="Save",
-            command=self.text_save).grid(row=0, column = 0)
+            command=self.text_save).grid(row=0, column=0)
         self.text_reload_button = tk.Button(
             self.input_control_frame,
             text="Reload",
-            command=self.text_reload).grid(row=0, column = 1)
+            command=self.text_reload).grid(row=0, column=1)
         self.render_update_button = tk.Button(
             self.render_control_frame,
             text="Update",
-            command=self.text_render_engine.update).grid(row=0,column = 0)
+            command=self.text_render_engine.update).grid(row=0, column=0)
 
-        sticky_all=("N","S","E","W")
+        sticky_all = ("N", "S", "E", "W")
         self.page_list_frame.grid(sticky=sticky_all, row=0, column=0)
         self.input_notebook.grid(sticky=sticky_all, row=0, column=1)
         self.render_frame.grid(sticky=sticky_all, row=0, column=2)
@@ -133,12 +140,11 @@ class ScriptEditor(tk.Frame):
                 if info and info['CFBundleName'] == 'Python':
                     info['CFBundleName'] = "ScriptEditor"
 
-
-        self.parent = parent
         self.parent.config(menu=self.menubar)
 
     def create_content_grid(self):
-        self.content = ttk.Frame(root)
+        """Create the grid to layout the main window"""
+        self.content = ttk.Frame(self.parent)
         tk.Grid.rowconfigure(self.content, 0, weight=6)
         tk.Grid.rowconfigure(self.content, 1, weight=1)
         tk.Grid.columnconfigure(self.content, 0, weight=1)
@@ -146,6 +152,7 @@ class ScriptEditor(tk.Frame):
         tk.Grid.columnconfigure(self.content, 2, weight=8)
 
     def build_menubar(self):
+        """Create the Menubar for the application"""
         filemenu = tk.Menu(self.menubar, tearoff=0)
         filemenu.add_command(label="New", command=self.on_file_new)
         filemenu.add_command(label="Open", command=self.on_file_open)
@@ -156,88 +163,98 @@ class ScriptEditor(tk.Frame):
         filemenu.add_command(label="Exit", command=self.quit)
         self.menubar.add_cascade(label="File", menu=filemenu)
 
-    def on_page_select(self,evt):
-        w = evt.widget
-        if (w.curselection() != ()):
-            index = int(w.curselection()[0])
-            value = w.get(index)
+    def on_page_select(self, evt):
+        """Triggered when a page is selected from the page_list"""
+        widget = evt.widget
+        if widget.curselection() != ():
+            index = int(widget.curselection()[0])
             if self.page != (index + 1):
                 self.page = index + 1
                 self.update_page(self.page)
 
     def text_reload(self):
+        """replace the TEXT data with a fresh copy from the file"""
         self.update_page(self.page)
         print "Text Reload:"
 
     def text_save(self):
-        page_text = self.text_text.get("1.0",tk.END)
-        file = open(self.edit_page_path, 'w')
-        file.write(page_text.encode('utf-8'))
-        file.close()
+        """Save the current text in the file"""
+        page_text = self.text_text.get("1.0", tk.END)
+        t_file = open(self.edit_page_path, 'w')
+        t_file.write(page_text.encode('utf-8'))
+        t_file.close()
         self.file_saved = True
 
-    def change_callback(self,evt):
+    def change_callback(self, _evt):
+        """Triggers when the text is changed"""
         self.file_saved = False
 
     def donothing(self):
-       filewin = Toplevel(self)
-       button = Button(filewin, text="Do nothing button")
-       button.pack()
+        """Might do Nothing"""
+        filewin = Toplevel(self)
+        button = tk.Button(filewin, text="Do nothing button")
+        button.pack()
 
-    def update_page(self,index):
+    def update_page(self, index):
+        """Triggers when page is changed, displays images and text, renders output"""
         if self.dir_path != "":
             orig_file = "%s/text_pages/pg_%04d.txt.orig" % (self.dir_path, index)
             self.edit_page_path = ("%s/text_pages/pg_%04d.txt" % (self.dir_path, index))
             if os.path.isfile(orig_file) != True:
-                shutil.copyfile(filename, orig_file)
+                shutil.copyfile(self.edit_page_path, orig_file)
             self.ocr_text.config(state=tk.NORMAL)
-            self.ocr_text.delete('1.0',tk.END)
+            self.ocr_text.delete('1.0', tk.END)
             self.text_text.delete('1.0', tk.END)
-            file = open(self.edit_page_path, 'r')
-            page_text = file.read()
-            self.text_text.insert('1.0',page_text)
+            txt_file = open(self.edit_page_path, 'r')
+            page_text = txt_file.read()
+            self.text_text.insert('1.0', page_text)
             ocr_file = open(orig_file, 'r')
-            self.ocr_text.insert('1.0',ocr_file.read())
+            self.ocr_text.insert('1.0', ocr_file.read())
             self.ocr_text.config(state=tk.DISABLED)
 
-            file.close()
+            txt_file.close()
             self.text_render_engine.update()
 
             tiff_file = "%s/tiff_pages/pg_%04d.tiff" % (self.dir_path, index)
             tiff_img = Image.open(tiff_file)
-            self.tiff_im=ImageTk.PhotoImage(tiff_img,self.tiff_label)
-            self.tiff_label.config(image = self.tiff_im)
+            self.tiff_im = ImageTk.PhotoImage(tiff_img, self.tiff_label)
+            self.tiff_label.config(image=self.tiff_im)
 
             pdf_file = "%s/pdf_pages/pg_%04d.pdf" % (self.dir_path, index)
-            pdf_fh=glob.glob(pdfImg.PyGs({}).make_img_from_pdf(pdf_file)[1])[0]
+            pdf_fh = glob.glob(pdfImg.PyGs({}).make_img_from_pdf(pdf_file)[1])[0]
             pdf_img = Image.open(pdf_fh)
-            tk_pdf_img=ImageTk.PhotoImage(pdf_img)
-            self.pdf_canvas.itemconfig(self.pdf_image, image = tk_pdf_img)
+            tk_pdf_img = ImageTk.PhotoImage(pdf_img)
+            self.pdf_canvas.itemconfig(self.pdf_image, image=tk_pdf_img)
             pdf_img.close()
             os.remove(pdf_fh)
             self.page = index
 
     def prev_page(self):
+        """Triggered when previous page button pressed"""
         if self.page > 1:
             page = self.page - 1
             self.page_list_box.see(page - 1)
             self.page_list_box.selection_clear(page)
-            self.page_list_box.select_set(page - 1, last=None) #This only sets focus on the first item.
+            #This only sets focus on the first item.
+            self.page_list_box.select_set(page - 1, last=None)
             self.update_page(page)
 
     def next_page(self):
+        """Triggered when next_page button pressed"""
         if self.page < self.max_page:
             page = self.page + 1
             self.page_list_box.see(page - 1)
-            self.page_list_box.select_set(page - 1, last=None) #This only sets focus on the first item.
+            #This only sets focus on the first item.
+            self.page_list_box.select_set(page - 1, last=None)
             self.page_list_box.selection_clear(page - 2)
             self.update_page(page)
 
     def load_dir(self):
+        """Load pages from the specified Directory"""
         #Check for pdf_pages
         if os.path.isdir(self.dir_path+'/pdf_pages'):
             print "found PDF_Pages"
-        else :
+        else:
             tkMessageBox.showinfo("Error loading project", self.dir_path+'/pdf_pages not found!')
             self.dir_path = ""
             return
@@ -257,10 +274,10 @@ class ScriptEditor(tk.Frame):
             return
         #walk tiff_pages and generate page_list.
         i = 1
-        for f in os.listdir(self.dir_path+'/tiff_pages'):
-             if os.path.isfile(self.dir_path+'/tiff_pages/'+f):
-                 self.page_list_box.insert(tk.END,i)
-                 i = i + 1
+        for tiff_pg in os.listdir(self.dir_path+'/tiff_pages'):
+            if os.path.isfile(self.dir_path+'/tiff_pages/'+tiff_pg):
+                self.page_list_box.insert(tk.END, i)
+                i = i + 1
         self.file_saved = True
         self.max_page = i - 1
         self.page = 1
@@ -269,9 +286,11 @@ class ScriptEditor(tk.Frame):
         #self.page_prev_button.config(state="DISABLED")
 
     def on_file_new(self):
+        """Will support loading PDF for processing down to OCR."""
         print 'NewFile'
 
     def on_file_open(self):
+        """Triggered on menu FILE->OPEN"""
         opts = {}
         opts['title'] = 'Open a new project'
         self.dir_path = tkFileDialog.askdirectory(**opts)
