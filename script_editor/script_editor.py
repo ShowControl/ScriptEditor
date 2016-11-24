@@ -18,6 +18,7 @@ import script_render_engine
 import script_parse_engine
 from PIL import Image
 from PIL import ImageTk
+#from pprint import pprint
 
 class ScriptEditor(tk.Frame):
     """Main GUI Class for ScriptEditor"""
@@ -50,7 +51,8 @@ class ScriptEditor(tk.Frame):
         self.page_list_box = tk.Listbox(
             self.page_list_frame,
             yscrollcommand=self.page_list_scrollbar.set,
-            selectmode=tk.SINGLE)
+            selectmode=tk.SINGLE,
+            width=5)
         self.page_list_box.bind('<<ListboxSelect>>', self.on_page_select)
         self.page_list_scrollbar.config(command=self.page_list_box.yview)
         self.page_list_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
@@ -68,13 +70,12 @@ class ScriptEditor(tk.Frame):
         self.input_notebook.add(self.text_tab, text='TXT')
 
         #PDF Input Tab
-        self.pdf_canvas = tk.Canvas(self.pdf_tab, height=250, width=300)
-        self.pdf_image = self.pdf_canvas.create_image(0, 0)
-        self.pdf_canvas.pack(fill="both", expand="yes")
+        self.pdf_label = tk.Label(self.pdf_tab, image=None)
+        #self.pdf_image = self.pdf_canvas.create_image(0, 0)
+        self.pdf_label.pack(fill="both", expand="yes")
 
         #TIFF Input Tab
-        #tiff_label = Tkinter.Canvas(tiff_tab, height=250, width=300)
-        self.tiff_label = tk.Label(self.tiff_tab, height=250, width=300)
+        self.tiff_label = tk.Label(self.tiff_tab, image=None)
         self.tiff_label.pack(fill="both", expand="yes")
 
         #OCR Input Tab
@@ -86,7 +87,10 @@ class ScriptEditor(tk.Frame):
         self.text_text = tk.Text(self.text_tab)
         self.text_text.focus()
         self.text_text.pack(fill="both", expand="yes")
+        self.text_text.bind('<Key>', self.change_callback)
         self.text_text.bind('<<Modified>>', self.change_callback)
+        # attach popup to frame
+        self.text_text.bind('<Button-2>', self.edit_menu_popup_event)
 
         #Rendered View
         self.rendered_text = tk.Text(self.render_frame)
@@ -102,24 +106,29 @@ class ScriptEditor(tk.Frame):
         self.page_next_button = tk.Button(
             self.page_control_frame,
             text="Next Page",
-            command=self.next_page).grid(row=0, column=1)
+            command=self.next_page)
+        self.page_next_button.grid(row=0, column=0)
         self.page_prev_button = tk.Button(
             self.page_control_frame,
             text="Prev. Page",
-            command=self.prev_page).grid(row=0, column=0)
-
+            command=self.prev_page)
+        self.page_prev_button.grid(row=1, column=0)
         self.text_save_button = tk.Button(
             self.input_control_frame,
             text="Save",
-            command=self.text_save).grid(row=0, column=0)
+            command=self.text_save)
+        self.text_save_button.grid(row=0, column=0)
         self.text_reload_button = tk.Button(
             self.input_control_frame,
             text="Reload",
-            command=self.text_reload).grid(row=0, column=1)
+            command=self.text_reload)
+        self.text_reload_button.grid(row=0, column=1)
         self.render_update_button = tk.Button(
             self.render_control_frame,
             text="Update",
-            command=self.text_render_engine.update).grid(row=0, column=0)
+            command=self.text_render_engine.update)
+        self.render_update_button.grid(row=0, column=0)
+        #pprint(vars(self))
 
         sticky_all = ("N", "S", "E", "W")
         self.page_list_frame.grid(sticky=sticky_all, row=0, column=0)
@@ -145,11 +154,11 @@ class ScriptEditor(tk.Frame):
     def create_content_grid(self):
         """Create the grid to layout the main window"""
         self.content = ttk.Frame(self.parent)
-        tk.Grid.rowconfigure(self.content, 0, weight=6)
-        tk.Grid.rowconfigure(self.content, 1, weight=1)
-        tk.Grid.columnconfigure(self.content, 0, weight=1)
-        tk.Grid.columnconfigure(self.content, 1, weight=8)
-        tk.Grid.columnconfigure(self.content, 2, weight=8)
+        tk.Grid.rowconfigure(self.content, 1, weight=0)
+        tk.Grid.rowconfigure(self.content, 0, weight=1000)
+        tk.Grid.columnconfigure(self.content, 0, weight=0)
+        tk.Grid.columnconfigure(self.content, 1, weight=1)
+        tk.Grid.columnconfigure(self.content, 2, weight=1)
 
     def build_menubar(self):
         """Create the Menubar for the application"""
@@ -163,6 +172,17 @@ class ScriptEditor(tk.Frame):
         filemenu.add_command(label="Exit", command=self.quit)
         self.menubar.add_cascade(label="File", menu=filemenu)
 
+        # create an edit popup menu
+        self.edit_menu_popup = tk.Menu(self, tearoff=0)
+        self.edit_menu_popup.add_command(label="Enter", command=self.edit_swap_enter)
+        self.edit_menu_popup.add_command(label="Exit", command=self.edit_swap_exit)
+        self.edit_menu_popup.add_command(label="Char", command=self.edit_swap_char)
+        self.edit_menu_popup.add_command(label="SD", command=self.edit_swap_sd)
+
+    def edit_menu_popup_event(self, event):
+        """Link the edit menu"""
+        self.edit_menu_popup.post(event.x_root, event.y_root)
+
     def on_page_select(self, evt):
         """Triggered when a page is selected from the page_list"""
         widget = evt.widget
@@ -175,7 +195,8 @@ class ScriptEditor(tk.Frame):
     def text_reload(self):
         """replace the TEXT data with a fresh copy from the file"""
         self.update_page(self.page)
-        print "Text Reload:"
+        self.file_saved = True
+        self.file_saved_true()
 
     def text_save(self):
         """Save the current text in the file"""
@@ -184,10 +205,34 @@ class ScriptEditor(tk.Frame):
         t_file.write(page_text.encode('utf-8'))
         t_file.close()
         self.file_saved = True
+        self.file_saved_true()
 
     def change_callback(self, _evt):
         """Triggers when the text is changed"""
         self.file_saved = False
+        self.file_saved_false()
+
+    def edit_swap_enter(self):
+        """ replace the select string with #enter($1)"""
+        self.edit_swap_txt("enter")
+
+    def edit_swap_exit(self):
+        """Replace the selected string with #exit($1)"""
+        self.edit_swap_txt("exit")
+
+    def edit_swap_char(self):
+        """Replace the selected string with #char($1)"""
+        self.edit_swap_txt("char")
+
+    def edit_swap_sd(self):
+        """Replace the selected string with #sd($1)"""
+        self.edit_swap_txt("sd")
+
+    def edit_swap_txt(self, txt):
+        """function to generate the replacement for an arbitrary tag name"""
+        content = self.text_text.get(tk.SEL_FIRST, tk.SEL_LAST)
+        self.text_text.delete(tk.SEL_FIRST, tk.SEL_LAST)
+        self.text_text.insert(tk.CURRENT, "#"+txt+"("+content+")")
 
     def donothing(self):
         """Might do Nothing"""
@@ -217,14 +262,18 @@ class ScriptEditor(tk.Frame):
 
             tiff_file = "%s/tiff_pages/pg_%04d.tiff" % (self.dir_path, index)
             tiff_img = Image.open(tiff_file)
-            self.tiff_im = ImageTk.PhotoImage(tiff_img, self.tiff_label)
-            self.tiff_label.config(image=self.tiff_im)
+            tiff_img = tiff_img.resize((500, 600), Image.ANTIALIAS)
+            tiff_im = ImageTk.PhotoImage(tiff_img)
+            self.tiff_label.config(image=tiff_im)
+            self.tiff_label.image = tiff_im
 
             pdf_file = "%s/pdf_pages/pg_%04d.pdf" % (self.dir_path, index)
             pdf_fh = glob.glob(pdfImg.PyGs({}).make_img_from_pdf(pdf_file)[1])[0]
             pdf_img = Image.open(pdf_fh)
+            pdf_img = pdf_img.resize((500, 600), Image.ANTIALIAS)
             tk_pdf_img = ImageTk.PhotoImage(pdf_img)
-            self.pdf_canvas.itemconfig(self.pdf_image, image=tk_pdf_img)
+            self.pdf_label.config(image=tk_pdf_img)
+            self.pdf_label.image = tk_pdf_img
             pdf_img.close()
             os.remove(pdf_fh)
             self.page = index
@@ -283,7 +332,19 @@ class ScriptEditor(tk.Frame):
         self.page = 1
         self.page_list_box.select_set(0) #This only sets focus on the first item.
         self.update_page(self.page)
-        #self.page_prev_button.config(state="DISABLED")
+        self.file_saved_true()
+
+    def file_saved_true(self):
+        """Allow navigation to other pages now that we are saved."""
+        self.page_next_button.config(state='normal')
+        self.page_prev_button.config(state='normal')
+        self.text_save_button.config(state='disabled')
+
+    def file_saved_false(self):
+        """Forbid navigation to new pages when the current text has changed"""
+        self.page_next_button.config(state='disabled')
+        self.page_prev_button.config(state='disabled')
+        self.text_save_button.config(state='normal')
 
     def on_file_new(self):
         """Will support loading PDF for processing down to OCR."""
@@ -292,13 +353,13 @@ class ScriptEditor(tk.Frame):
     def on_file_open(self):
         """Triggered on menu FILE->OPEN"""
         opts = {}
-        opts['title'] = 'Open a new project'
+        opts['title'] = 'Open an existing project'
         self.dir_path = tkFileDialog.askdirectory(**opts)
         if self.dir_path != "":
             self.load_dir()
 
 if __name__ == '__main__':
-    root = tk.Tk()
-    root.title("ShowControl:ScriptEditor v0.0.1")
-    ScriptEditor(root).pack(side="top", fill="both", expand=True)
-    root.mainloop()
+    ROOT = tk.Tk()
+    ROOT.title("ShowControl:ScriptEditor v0.0.3")
+    ScriptEditor(ROOT).pack(side="top", fill="both", expand=True)
+    ROOT.mainloop()
