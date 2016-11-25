@@ -174,10 +174,11 @@ class ScriptEditor(tk.Frame):
 
         # create an edit popup menu
         self.edit_menu_popup = tk.Menu(self, tearoff=0)
+        self.edit_menu_popup.add_command(label="Char", command=self.edit_swap_char)
         self.edit_menu_popup.add_command(label="Enter", command=self.edit_swap_enter)
         self.edit_menu_popup.add_command(label="Exit", command=self.edit_swap_exit)
-        self.edit_menu_popup.add_command(label="Char", command=self.edit_swap_char)
         self.edit_menu_popup.add_command(label="SD", command=self.edit_swap_sd)
+        self.edit_menu_popup.add_command(label="Location", command=self.edit_swap_location)
 
     def edit_menu_popup_event(self, event):
         """Link the edit menu"""
@@ -211,6 +212,10 @@ class ScriptEditor(tk.Frame):
         """Triggers when the text is changed"""
         self.file_saved = False
         self.file_saved_false()
+
+    def edit_swap_location(self):
+        """Replace the selected text with #location(#1)"""
+        self.edit_swap_txt("location")
 
     def edit_swap_enter(self):
         """ replace the select string with #enter($1)"""
@@ -251,6 +256,7 @@ class ScriptEditor(tk.Frame):
             self.ocr_text.delete('1.0', tk.END)
             self.text_text.delete('1.0', tk.END)
             txt_file = open(self.edit_page_path, 'r')
+            self.page_list_box.itemconfig(index - 1, {'bg':'blue'})
             page_text = txt_file.read()
             self.text_text.insert('1.0', page_text)
             ocr_file = open(orig_file, 'r')
@@ -326,6 +332,10 @@ class ScriptEditor(tk.Frame):
         for tiff_pg in os.listdir(self.dir_path+'/tiff_pages'):
             if os.path.isfile(self.dir_path+'/tiff_pages/'+tiff_pg):
                 self.page_list_box.insert(tk.END, i)
+                orig_file = "%s/text_pages/pg_%04d.txt.orig" % (self.dir_path, i)
+                if os.path.isfile(orig_file):
+                    self.page_list_box.itemconfig(i - 1, {'bg':'blue'})
+
                 i = i + 1
         self.file_saved = True
         self.max_page = i - 1
