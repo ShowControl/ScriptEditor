@@ -16,9 +16,9 @@ from sys import platform
 import pypdfocr.pypdfocr_gs as pdfImg
 import script_render_engine
 import script_parse_engine
+import script_ck
 from PIL import Image
 from PIL import ImageTk
-#from pprint import pprint
 
 class ScriptEditor(tk.Frame):
     """Main GUI Class for ScriptEditor"""
@@ -29,49 +29,20 @@ class ScriptEditor(tk.Frame):
         self.page = 1
         self.file_saved = True # Changes to false when a file has been changed but not saved.
         self.max_page = 0
-        self.project = None # Name of the current project.
         self.dir_path = ""
         self.edit_page_path = ""
         self.tiff_im = None
 
         self.menubar = tk.Menu(self)
-        self.build_menubar()
+        self.__build_menubar()
         self.parent = parent
-        self.create_content_grid()
-
-        self.page_list_frame = tk.LabelFrame(self.content, text="Pages")
-        self.input_notebook = ttk.Notebook(self.content)
-        self.render_frame = tk.LabelFrame(self.content, text="Rendered Script")
-        self.page_control_frame = tk.Frame(self.content)
-        self.input_control_frame = tk.Frame(self.content)
-        self.render_control_frame = tk.Frame(self.content)
-
-        #List of pages
-        self.page_list_scrollbar = tk.Scrollbar(self.page_list_frame, orient=tk.VERTICAL)
-        self.page_list_box = tk.Listbox(
-            self.page_list_frame,
-            yscrollcommand=self.page_list_scrollbar.set,
-            selectmode=tk.SINGLE,
-            width=5)
-        self.page_list_box.bind('<<ListboxSelect>>', self.on_page_select)
-        self.page_list_scrollbar.config(command=self.page_list_box.yview)
-        self.page_list_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        self.page_list_box.pack(side=tk.LEFT, fill="both", expand="yes")
-
-        #Tabs of Input
-        # first page, which would get widgets gridded into it
-        self.pdf_tab = tk.Frame(self.input_notebook)
-        self.tiff_tab = tk.Frame(self.input_notebook)   # second page
-        self.ocr_tab = tk.Frame(self.input_notebook)
-        self.text_tab = tk.Frame(self.input_notebook)
-        self.input_notebook.add(self.pdf_tab, text='PDF')
-        self.input_notebook.add(self.tiff_tab, text='TIFF')
-        self.input_notebook.add(self.ocr_tab, text='OCR')
-        self.input_notebook.add(self.text_tab, text='TXT')
+        self.__create_content_grid()
+        self.__create_frames()
+        self.__build_page_list()
+        self.__create_notebook()
 
         #PDF Input Tab
         self.pdf_label = tk.Label(self.pdf_tab, image=None)
-        #self.pdf_image = self.pdf_canvas.create_image(0, 0)
         self.pdf_label.pack(fill="both", expand="yes")
 
         #TIFF Input Tab
@@ -103,6 +74,30 @@ class ScriptEditor(tk.Frame):
             self.rendered_text,
             self.text_parse_engine)
 
+        self.__build_buttons()
+
+        sticky_all = ("N", "S", "E", "W")
+        self.page_list_frame.grid(sticky=sticky_all, row=0, column=0)
+        self.input_notebook.grid(sticky=sticky_all, row=0, column=1)
+        self.render_frame.grid(sticky=sticky_all, row=0, column=2)
+        self.page_control_frame.grid(sticky=sticky_all, row=1, column=0)
+        self.input_control_frame.grid(sticky=sticky_all, row=1, column=1)
+        self.render_control_frame.grid(sticky=sticky_all, row=1, column=2)
+
+        self.content.pack(fill="both", expand="yes")
+
+        # Check if we're on OS X, first.
+        if platform == 'darwin':
+            from Foundation import NSBundle
+            bundle = NSBundle.mainBundle()
+            if bundle:
+                info = bundle.localizedInfoDictionary() or bundle.infoDictionary()
+                if info and info['CFBundleName'] == 'Python':
+                    info['CFBundleName'] = "ScriptEditor"
+
+        self.parent.config(menu=self.menubar)
+
+    def __build_buttons(self):
         self.page_next_button = tk.Button(
             self.page_control_frame,
             text="Next Page",
@@ -128,30 +123,45 @@ class ScriptEditor(tk.Frame):
             text="Update",
             command=self.text_render_engine.update)
         self.render_update_button.grid(row=0, column=0)
-        #pprint(vars(self))
+        self.generate_output_button = tk.Button(
+            self.render_control_frame,
+            text="Output",
+            command=self.render_output)
+        self.generate_output_button.grid(row=1, column=0)
 
-        sticky_all = ("N", "S", "E", "W")
-        self.page_list_frame.grid(sticky=sticky_all, row=0, column=0)
-        self.input_notebook.grid(sticky=sticky_all, row=0, column=1)
-        self.render_frame.grid(sticky=sticky_all, row=0, column=2)
-        self.page_control_frame.grid(sticky=sticky_all, row=1, column=0)
-        self.input_control_frame.grid(sticky=sticky_all, row=1, column=1)
-        self.render_control_frame.grid(sticky=sticky_all, row=1, column=2)
+    def __create_notebook(self):
+        #Tabs of Input
+        self.pdf_tab = tk.Frame(self.input_notebook)
+        self.tiff_tab = tk.Frame(self.input_notebook)
+        self.ocr_tab = tk.Frame(self.input_notebook)
+        self.text_tab = tk.Frame(self.input_notebook)
+        self.input_notebook.add(self.pdf_tab, text='PDF')
+        self.input_notebook.add(self.tiff_tab, text='TIFF')
+        self.input_notebook.add(self.ocr_tab, text='OCR')
+        self.input_notebook.add(self.text_tab, text='TXT')
 
-        self.content.pack(fill="both", expand="yes")
+    def __build_page_list(self):
+        #List of pages
+        self.page_list_scrollbar = tk.Scrollbar(self.page_list_frame, orient=tk.VERTICAL)
+        self.page_list_box = tk.Listbox(
+            self.page_list_frame,
+            yscrollcommand=self.page_list_scrollbar.set,
+            selectmode=tk.SINGLE,
+            width=5)
+        self.page_list_box.bind('<<ListboxSelect>>', self.on_page_select)
+        self.page_list_scrollbar.config(command=self.page_list_box.yview)
+        self.page_list_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.page_list_box.pack(side=tk.LEFT, fill="both", expand="yes")
 
-        # Check if we're on OS X, first.
-        if platform == 'darwin':
-            from Foundation import NSBundle
-            bundle = NSBundle.mainBundle()
-            if bundle:
-                info = bundle.localizedInfoDictionary() or bundle.infoDictionary()
-                if info and info['CFBundleName'] == 'Python':
-                    info['CFBundleName'] = "ScriptEditor"
+    def __create_frames(self):
+        self.page_list_frame = tk.LabelFrame(self.content, text="Pages")
+        self.input_notebook = ttk.Notebook(self.content)
+        self.render_frame = tk.LabelFrame(self.content, text="Rendered Script")
+        self.page_control_frame = tk.Frame(self.content)
+        self.input_control_frame = tk.Frame(self.content)
+        self.render_control_frame = tk.Frame(self.content)
 
-        self.parent.config(menu=self.menubar)
-
-    def create_content_grid(self):
+    def __create_content_grid(self):
         """Create the grid to layout the main window"""
         self.content = ttk.Frame(self.parent)
         tk.Grid.rowconfigure(self.content, 1, weight=0)
@@ -160,25 +170,52 @@ class ScriptEditor(tk.Frame):
         tk.Grid.columnconfigure(self.content, 1, weight=1)
         tk.Grid.columnconfigure(self.content, 2, weight=1)
 
-    def build_menubar(self):
+    def __build_menubar(self):
         """Create the Menubar for the application"""
         filemenu = tk.Menu(self.menubar, tearoff=0)
-        filemenu.add_command(label="New", command=self.on_file_new)
         filemenu.add_command(label="Open", command=self.on_file_open)
-        filemenu.add_command(label="Save", command=self.donothing)
-        filemenu.add_command(label="Save as...", command=self.donothing)
-        filemenu.add_command(label="Close", command=self.donothing)
         filemenu.add_separator()
         filemenu.add_command(label="Exit", command=self.quit)
         self.menubar.add_cascade(label="File", menu=filemenu)
 
         # create an edit popup menu
         self.edit_menu_popup = tk.Menu(self, tearoff=0)
-        self.edit_menu_popup.add_command(label="Char", command=self.edit_swap_char)
-        self.edit_menu_popup.add_command(label="Enter", command=self.edit_swap_enter)
-        self.edit_menu_popup.add_command(label="Exit", command=self.edit_swap_exit)
-        self.edit_menu_popup.add_command(label="SD", command=self.edit_swap_sd)
-        self.edit_menu_popup.add_command(label="Location", command=self.edit_swap_location)
+        self.edit_menu_popup.add_command(label="Char", command=lambda: self.edit_swap_txt('char'))
+        self.edit_menu_popup.add_command(label="Enter", command=lambda: self.edit_swap_txt('enter'))
+        self.edit_menu_popup.add_command(label="Exit", command=lambda: self.edit_swap_txt('exit'))
+        self.edit_menu_popup.add_command(label="Stage Direction", \
+            command=lambda: self.edit_swap_txt('sd'))
+        self.edit_menu_popup.add_command(label="Page", command=lambda: self.edit_swap_txt('page'))
+        self.edit_menu_popup.add_command(label="Location", \
+            command=lambda: self.edit_swap_txt('location'))
+        self.edit_menu_popup.add_command(label="act", command=lambda: self.edit_swap_txt('act'))
+        self.edit_menu_popup.add_command(label="scene", command=lambda: self.edit_swap_txt('scene'))
+
+    def render_output(self):
+        """Combine the set of .txt files in order into one output"""
+        #TODO Setup license before output.
+        # Select file to save as
+        opts = {}
+        opts['title'] = 'Select Output file to save.'
+        opts['defaultextension'] = '.script'
+        opts['initialfile'] = 'output.script'
+        filename = tkFileDialog.asksaveasfilename(**opts)
+        #open file:
+        out_file = open(filename, 'w')
+        # Walk txt files combine into one.
+        for i in range(1, self.max_page + 1):
+            read_file = "%s/text_pages/pg_%04d.txt" % (self.dir_path, i)
+            f_read = open(read_file, "r")
+            out_file.write(f_read.read())
+            f_read.close()
+        out_file.close()
+        out_file = open(filename, 'r')
+        file_parse_engine = script_parse_engine.ScriptParseEngine(out_file)
+        file_sck_engine = script_ck.ScriptCk(
+                    self.rendered_text,
+                    file_parse_engine)
+        file_sck_engine.update()
+        out_file.close()
 
     def edit_menu_popup_event(self, event):
         """Link the edit menu"""
@@ -213,37 +250,11 @@ class ScriptEditor(tk.Frame):
         self.file_saved = False
         self.file_saved_false()
 
-    def edit_swap_location(self):
-        """Replace the selected text with #location(#1)"""
-        self.edit_swap_txt("location")
-
-    def edit_swap_enter(self):
-        """ replace the select string with #enter($1)"""
-        self.edit_swap_txt("enter")
-
-    def edit_swap_exit(self):
-        """Replace the selected string with #exit($1)"""
-        self.edit_swap_txt("exit")
-
-    def edit_swap_char(self):
-        """Replace the selected string with #char($1)"""
-        self.edit_swap_txt("char")
-
-    def edit_swap_sd(self):
-        """Replace the selected string with #sd($1)"""
-        self.edit_swap_txt("sd")
-
     def edit_swap_txt(self, txt):
         """function to generate the replacement for an arbitrary tag name"""
         content = self.text_text.get(tk.SEL_FIRST, tk.SEL_LAST)
         self.text_text.delete(tk.SEL_FIRST, tk.SEL_LAST)
         self.text_text.insert(tk.CURRENT, "#"+txt+"("+content+")")
-
-    def donothing(self):
-        """Might do Nothing"""
-        filewin = Toplevel(self)
-        button = tk.Button(filewin, text="Do nothing button")
-        button.pack()
 
     def update_page(self, index):
         """Triggers when page is changed, displays images and text, renders output"""
@@ -355,10 +366,6 @@ class ScriptEditor(tk.Frame):
         self.page_next_button.config(state='disabled')
         self.page_prev_button.config(state='disabled')
         self.text_save_button.config(state='normal')
-
-    def on_file_new(self):
-        """Will support loading PDF for processing down to OCR."""
-        print 'NewFile'
 
     def on_file_open(self):
         """Triggered on menu FILE->OPEN"""
